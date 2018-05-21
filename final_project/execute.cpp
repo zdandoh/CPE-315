@@ -1,3 +1,6 @@
+#include <iostream>
+#include <iomanip>
+#include <bitset>
 #include "thumbsim.hpp"
 // These are just the register NUMBERS
 #define PC_REG 15  
@@ -20,6 +23,10 @@ unsigned int signExtend16to32ui(short i) {
 }
 
 unsigned int signExtend8to32ui(char i) {
+  return static_cast<unsigned int>(static_cast<int>(i));
+}
+
+unsigned int signExtend11to32ui(short i) {
   return static_cast<unsigned int>(static_cast<int>(i));
 }
 
@@ -114,30 +121,69 @@ static int checkCondition(unsigned short cond) {
       }
       break;
     case NE:
+      if (flags.Z == 0) {
+        return TRUE;
+      }
       break;
     case CS:
+      if (flags.C == 1) {
+        return TRUE;
+      }
       break;
     case CC:
+      if(flags.C == 0) {
+        return TRUE;
+      }
       break;
     case MI:
+      if(flags.N == 1) {
+        return TRUE;
+      }
       break;
     case PL:
+      if(flags.N == 0) {
+        return TRUE;
+      }
       break;
     case VS:
+      if(flags.V == 1) {
+        return TRUE;
+      }
       break;
     case VC:
+      if(flags.V == 0) {
+        return TRUE;
+      }
       break;
     case HI:
+      if(flags.C == 1 && flags.Z == 0) {
+        return TRUE;
+      }
       break;
     case LS:
+      if(flags.C == 0 || flags.Z == 1) {
+        return TRUE;
+      }
       break;
     case GE:
+      if(flags.N == flags.V) {
+        return TRUE;
+      }
       break;
     case LT:
+      if(flags.N != flags.V) {
+        return TRUE;
+      }
       break;
     case GT:
+      if(flags.Z == 0 && flags.N == flags.V) {
+        return TRUE;
+      }
       break;
     case LE:
+      if(flags.Z == 1 || flags.N != flags.V) {
+        return TRUE;
+      }
       break;
     case AL:
       return TRUE;
@@ -147,6 +193,13 @@ static int checkCondition(unsigned short cond) {
 }
 
 void execute() {
+  // DEBUG
+  // for(int i = 0; i < 16; i++) {
+  //   cout << i << ": " << setbase(10) << (int)rf[i] << ", ";
+  // }
+  // cout << endl;
+  // getchar();
+
   Data16 instr = imem[PC];
   Data16 instr2;
   Data32 temp(0); // Use this for STRB instructions
@@ -194,30 +247,48 @@ void execute() {
       add_ops = decode(alu);
       switch(add_ops) {
         case ALU_LSLI:
+          rf.write(alu.instr.lsli.rd, alu.instr.lsli.rm << alu.instr.lsli.imm);
+          setCarryOverflow(rf[alu.instr.lsli.rm], rf[alu.instr.lsli.imm], OF_SHIFT);
+          setNegativeZeroFlags(alu.instr.lsli.rm << alu.instr.lsli.imm);
           break;
         case ALU_ADDR:
           // needs stats and flags
           rf.write(alu.instr.addr.rd, rf[alu.instr.addr.rn] + rf[alu.instr.addr.rm]);
+          setCarryOverflow(rf[alu.instr.addr.rn], rf[alu.instr.addr.rm], OF_ADD);
+          setNegativeZeroFlags(rf[alu.instr.addr.rn] + rf[alu.instr.addr.rm]);
           break;
         case ALU_SUBR:
+          rf.write(alu.instr.subr.rd, rf[alu.instr.subr.rn] - rf[alu.instr.subr.rm]);
+          setCarryOverflow(rf[alu.instr.subr.rn], rf[alu.instr.subr.rm], OF_SUB);
+          setNegativeZeroFlags(rf[alu.instr.subr.rn] - rf[alu.instr.subr.rm]);
           break;
         case ALU_ADD3I:
           // needs stats and flags
           rf.write(alu.instr.add3i.rd, rf[alu.instr.add3i.rn] + alu.instr.add3i.imm);
+          setCarryOverflow(rf[alu.instr.add3i.rn], alu.instr.add3i.imm, OF_ADD);
+          setNegativeZeroFlags(rf[alu.instr.add3i.rn] + alu.instr.add3i.imm);
           break;
         case ALU_SUB3I:
+          rf.write(alu.instr.sub3i.rd, rf[alu.instr.sub3i.rn] - alu.instr.sub3i.imm);
+          setCarryOverflow(rf[alu.instr.sub3i.rn], alu.instr.sub3i.imm, OF_SUB);
+          setNegativeZeroFlags(rf[alu.instr.sub3i.rn] + alu.instr.sub3i.imm);
           break;
         case ALU_MOV:
           // needs stats and flags
           rf.write(alu.instr.mov.rdn, alu.instr.mov.imm);
+          setNegativeZeroFlags(alu.instr.mov.imm);
+          setCarryOverflow(rf[alu.instr.mov.rdn], alu.instr.mov.imm, OF_SUB);
           break;
         case ALU_CMP:
+          setCarryOverflow(rf[alu.instr.cmp.rdn], alu.instr.cmp.imm, OF_SUB);
+          setNegativeZeroFlags(rf[alu.instr.cmp.rdn] - alu.instr.cmp.imm);
           break;
         case ALU_ADD8I:
           // needs stats and flags
           rf.write(alu.instr.add8i.rdn, rf[alu.instr.add8i.rdn] + alu.instr.add8i.imm);
           break;
         case ALU_SUB8I:
+          rf.write(alu.instr.sub8i.rdn, rf[alu.instr.sub8i.rdn] - alu.instr.sub8i.imm);
           break;
         default:
           cout << "instruction not implemented" << endl;
@@ -272,6 +343,8 @@ void execute() {
           rf.write((sp.instr.mov.d << 3 ) | sp.instr.mov.rd, rf[sp.instr.mov.rm]);
           break;
         case SP_ADD:
+          rf.write(sp.instr.add.rd, SP + rf[sp.instr.add.rm]); // unsure
+          break;
         case SP_CMP:
           // need to implement these
           break;
@@ -294,9 +367,13 @@ void execute() {
           break;
         case STRR:
           // need to implement
+          addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
+          dmem.write(addr, rf[ld_st.instr.ld_st_reg.rt]);
           break;
         case LDRR:
           // need to implement
+          addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
+          rf.write(ld_st.instr.ld_st_reg.rt, dmem[addr]);
           break;
         case STRBI:
           // need to implement
@@ -316,10 +393,49 @@ void execute() {
       misc_ops = decode(misc);
       switch(misc_ops) {
         case MISC_PUSH:
+          {
+            // Calculate initial address
+            std::bitset<8> bc(misc.instr.push.reg_list);
+            int addr = bc.count();
+            if(misc.instr.push.m) {
+              addr++;
+            }
+            addr *= 4;
+            addr = SP - addr;
+            int cp_addr = addr;
+            
+            for(int i = 0; i < 8; i++) {
+              if(misc.instr.push.reg_list & (1 << i)) {
+                dmem.write(addr, rf[i]);
+                addr += 4;
+              }
+            }
+            
+            if(misc.instr.push.m) {
+              dmem.write(addr, LR);
+            }
+
+            rf.write(SP_REG, cp_addr);
+          }
           // need to implement
           break;
         case MISC_POP:
           // need to implement
+          {
+            // Calculate initial address
+            int addr = SP;
+            
+            for(int i = 0; i < 8; i++) {
+              if(misc.instr.pop.reg_list & (1 << i)) {
+                rf.write(i, dmem[addr]);
+                addr += 4;
+              }
+            }
+            
+            if(misc.instr.push.m) {
+              rf.write(PC_REG, dmem[addr]);
+            }
+          }
           break;
         case MISC_SUB:
           // functionally complete, needs stats
@@ -344,6 +460,7 @@ void execute() {
       // Essentially the same as the conditional branches, but with no
       // condition check, and an 11-bit immediate field
       decode(uncond);
+      rf.write(PC_REG, PC + 2 * signExtend11to32ui(cond.instr.b.imm) + 2);
       break;
     case LDM:
       decode(ldm);
