@@ -15,21 +15,34 @@ void matmul( float*, const float*, const float*, unsigned int, unsigned int, uns
 //! @param wB         width of matrix B
 ////////////////////////////////////////////////////////////////////////////////
 
+void matmul_sub(float* C, const float* A, const float* B, unsigned int sub_size, 
+  unsigned int big_size)
+{
+  for (unsigned int i = 0; i < sub_size; ++i)
+    for (unsigned int j = 0; j < sub_size; ++j) {
+      double sum = 0;
+      for (unsigned int k = 0; k < sub_size; ++k) {
+        double a = A[i * big_size + k];
+        double b = B[j * big_size + k];
+        sum += a * b;
+      }
+      C[i * big_size + j] += (float)sum;
+    }
+}
+
 /* You'll need to modify this function such that matrix B is accessed
  * correctly once you change the memory layout to column-major. */
 void matmul(float* C, const float* A, const float* B, unsigned int hA, 
     unsigned int wA, unsigned int wB)
 {
-  for (unsigned int i = 0; i < hA; ++i)
-    for (unsigned int j = 0; j < wB; ++j) {
-      double sum = 0;
-      for (unsigned int k = 0; k < wA; ++k) {
-        double a = A[i * wA + k];
-        double b = B[j * wB + k];
-        sum += a * b;
+  unsigned int total = wA * hA;
+  for(unsigned int k = 0; k < total; k += wA * BLOCK_SIZE) {
+    for(unsigned int i = 0; i < wA; i += BLOCK_SIZE) {
+      for(unsigned int j = 0; j < wA; j += BLOCK_SIZE) {
+        matmul_sub(C + k + i, A + k + j, B + (i * wA) + j, BLOCK_SIZE, wB);
       }
-      C[i * wB + j] = (float)sum;
     }
+  }
 }
 
 // Allocate a matrix of dimensions height*width
