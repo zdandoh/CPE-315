@@ -25,7 +25,7 @@ void matmul(float* C, const float* A, const float* B, unsigned int hA,
       double sum = 0;
       for (unsigned int k = 0; k < wA; ++k) {
         double a = A[i * wA + k];
-        double b = B[i * wB + k];
+        double b = B[j * wB + k];
         sum += a * b;
       }
       C[i * wB + j] = (float)sum;
