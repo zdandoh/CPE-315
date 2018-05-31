@@ -1,0 +1,18 @@
+00000000   ^ higher memory addresses
+11111111
+11111111
+11111111
+11111111 <- mem addr
+00000000   v lower memory addresses
+
+A ldr will grab the current addr and 3 bytes above
+
+str of 513 or "0000001000000001"
+
+00000000
+00000000
+00000010
+00000001 <- mem addr
+
+saturday - sweet springs los osos
+dave klendennen 9-12, write a little write up about what you did and what was interesting
