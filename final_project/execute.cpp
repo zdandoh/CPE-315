@@ -23,10 +23,11 @@ unsigned int signExtend16to32ui(short i) {
 }
 
 unsigned int signExtend8to32ui(char i) {
+  unsigned int data = static_cast<unsigned int>(static_cast<int>(i));
   return static_cast<unsigned int>(static_cast<int>(i));
 }
 
-unsigned int signExtend11to32ui(short i) {
+int signExtend11to32ui(short i) {
   if(i & 1024) { // 1024 = 0000010000000000 - check if 11th bit is set
     i = i | 63488; // 63488 = 1111100000000000
   }
@@ -377,11 +378,14 @@ void execute() {
         case SP_MOV:
           // needs stats and flags
           rf.write((sp.instr.mov.d << 3 ) | sp.instr.mov.rd, rf[sp.instr.mov.rm]);
+          setNegativeZeroFlags(rf[sp.instr.mov.rm]);
           stats.numRegReads += 2;
           stats.numRegWrites++;
           break;
         case SP_ADD:
           rf.write(sp.instr.add.rd, SP + rf[sp.instr.add.rm]); // unsure
+          setNegativeZeroFlags(SP + rf[sp.instr.add.rm]);
+          setCarryOverflow(SP, rf[sp.instr.add.rm], OF_ADD);
           stats.numRegWrites++;
           stats.numRegReads += 2;
           break;
@@ -558,14 +562,13 @@ void execute() {
           stats.numBackwardBranchesTaken += taken;
           stats.numBackwardBranchesNotTaken += not_taken;
         }
-        break;
       }
       break;
     case UNCOND:
       // Essentially the same as the conditional branches, but with no
       // condition check, and an 11-bit immediate field
       decode(uncond);
-      rf.write(PC_REG, PC + 2 * signExtend11to32ui(cond.instr.b.imm) + 2);
+      rf.write(PC_REG, PC + 2 * signExtend11to32ui(uncond.instr.b.imm) + 2);
       stats.numRegReads++;
       stats.numRegWrites++;
       break;
