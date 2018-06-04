@@ -450,12 +450,8 @@ void execute() {
           {
             addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
             unsigned int data = dmem[addr];
-            cout << "PENSI: ";
-            cout << data;
-            data = data & 0xFFFFFF00; // clear the bottom 8 bits
-            cout << ", " << data;
-            data = data | (char)rf[ld_st.instr.ld_st_imm.rt]; // modify the bottom 8 bits
-            cout << ", " << data << endl;
+            data = data & 0x00FFFFFF; // clear the top 8 bits
+            data = data | (rf[ld_st.instr.ld_st_imm.rt] << 24); // modify the top 8 bits
             dmem.write(addr, data);
           }
           break;
@@ -463,7 +459,7 @@ void execute() {
           // need to implement
           {
             addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
-            unsigned int data = 0x000000FF & (unsigned int)(char)dmem[addr];
+            unsigned int data = dmem[addr] >> 24;
             rf.write(ld_st.instr.ld_st_imm.rt, data);
           }
           break;
@@ -472,8 +468,8 @@ void execute() {
           {
             int addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
             unsigned int data = dmem[addr];
-            data = data & 0xFFFFFF00; // clear the bottom 8 bits
-            data = data | (char)rf[ld_st.instr.ld_st_reg.rt]; // modify the bottom 8 bits
+            data = data & 0x00FFFFFF; // clear the top 8 bits
+            data = data | (rf[ld_st.instr.ld_st_reg.rt] << 24); // modify the top 8 bits
             dmem.write(addr, data);
           }
           break;
@@ -481,7 +477,7 @@ void execute() {
           // need to implement
           {
             int addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
-            unsigned int data = 0x000000FF & (unsigned int)(char)dmem[addr];
+            unsigned int data = dmem[addr] >> 24;
             rf.write(ld_st.instr.ld_st_reg.rt, data);
           }
           break;
