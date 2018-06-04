@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 #include "thumbsim.hpp"
 
 using namespace std;
@@ -185,11 +186,43 @@ SP_Ops decode (const SP_Type data) {
   }
   else if (data.instr.add.op == 0) {
     // Here you'll need to SP_ADD similar to above
-    cout << "add sp, sp, r" << data.instr.add.rm << endl;
+    int rd = data.instr.add.rd;
+    std::ostringstream rname;
+    if(opts.instrs) {
+      if(data.instr.add.d) {
+        rd += 8;
+        if(rd == 13) {
+          rname << "sp";
+        }
+        else {
+          rname << "r" << rd;
+        }
+      }
+      else {
+        rname << "r" << rd;
+      }
+
+      cout << "add " << rname.str() << ", " << rname.str() << ", r" << data.instr.add.rm << endl;
+    }
     return SP_ADD;
   }
   else if (data.instr.cmp.op == 1) {
     // Here you'll need to SP_CMP similar to above
+    if(opts.instrs) {
+      std::ostringstream rname;
+      int rd = data.instr.cmp.rd;
+      if(data.instr.cmp.d) {
+        rd += 8;
+      }
+      if(rd == 13) {
+        rname << "sp";
+      }
+      else {
+        rname << "r" << rd;
+      }
+
+      cout << "cmp r" << setbase(10) << rd << ", r" << data.instr.cmp.rm << endl;
+    }
     return SP_CMP;
   }
   else {
@@ -247,21 +280,23 @@ LD_ST_Ops decode (const LD_ST_Type data) {
     if (data.instr.ld_st_imm.op == LD_ST_LDB) {
       // 315: write code to print ldrb
       if(opts.instrs) {
-        cout << "ldrb r" << data.instr.ld_st_imm.rt << ", [" << data.instr.ld_st_imm.rn << ", #" << data.instr.ld_st_imm.imm << "]" << endl;
+        cout << "ldrb r" << data.instr.ld_st_imm.rt << ", [r" << data.instr.ld_st_imm.rn << ", #" << data.instr.ld_st_imm.imm << "]" << endl;
       }
       return LDRBI;
     }
     else if (data.instr.ld_st_imm.op == LD_ST_STB) {
       // 315: write code to print strb
       if(opts.instrs) {
-        cout << "strb r" << data.instr.ld_st_imm.rt << ", [" << data.instr.ld_st_imm.rn << ", #" << data.instr.ld_st_imm.imm << "]" << endl;
+        cout << "strb r" << data.instr.ld_st_imm.rt << ", [r" << data.instr.ld_st_imm.rn << ", #" << data.instr.ld_st_imm.imm << "]" << endl;
       }
       return STRBI;
     }
   }
   else if (data.instr.class_type.opA == LD_ST_IMMB_OPA) {
+    cout << "SOMETHING SHOULD HAPPEN HERE?\n";
   }
   else if (data.instr.class_type.opA == LD_ST_IMMH_OPA) {
+    cout << "SOMETHING SHOULD HAPPEN HERE 2?\n";
   }
   else if (data.instr.class_type.opA == LD_ST_IMMSP_OPA) {
     if (data.instr.ld_st_sp_imm.opB) {
@@ -454,25 +489,53 @@ BL_Ops decode (const BL_Type data) {
 
 int decode (const LDM_Type data) {
   // 315: add code to print ldm
-  cout << "BEWBS2\n";
+  if(opts.instrs) {
+    cout << "ldm r" << data.instr.ldm.rn << "!, {";
+    bool first = true;
+    for(int i = 0; i < 8; i++) {
+      if(data.instr.ldm.reg_list & (1 << i)) {
+        if(!first) {
+          cout << ", ";
+        }
+        cout << "r" << int(i);
+        first = false;
+      }
+    }
+    cout << "}" << endl;
+  }
   return LDM;
 }
 
 int decode (const STM_Type data) {
-  // 315: add code to print ldm 
-  cout << "WOOBS\n";
+  // 315: add code to print ldm
+  if(opts.instrs) {
+    cout << "stm r" << data.instr.stm.rn << "!, {";
+    bool first = true;
+    for(int i = 0; i < 8; i++) {
+      if(data.instr.stm.reg_list & (1 << i)) {
+        if(!first) {
+          cout << ", ";
+        }
+        cout << "r" << int(i);
+        first = false;
+      }
+    }
+    cout << "}" << endl;
+  }
   return STM;
 }
 
 int decode (const LDRL_Type data) {
   // 315: add code to print ldr
-  cout << "ldr r" << data.instr.ldrl.rt << ", [pc, #" << setbase(10) << data.instr.ldrl.imm * 4 << "]" << endl;
+  if(opts.instrs) {
+    cout << "ldr r" << data.instr.ldrl.rt << ", [pc, #" << setbase(10) << data.instr.ldrl.imm * 4 << "]" << endl;
+  }
   return LDRL;
 }
 
 int decode (const ADD_SP_Type data) {
   // complete
   if (opts.instrs) { 
-    cout << "add r" << data.instr.add.rd << ", sp, #" << data.instr.add.imm*4 << endl;
+    cout << "add r" << data.instr.add.rd << ", sp, #" << setbase(10) << data.instr.add.imm*4 << endl;
   }
 }

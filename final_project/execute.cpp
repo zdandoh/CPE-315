@@ -23,7 +23,6 @@ unsigned int signExtend16to32ui(short i) {
 }
 
 unsigned int signExtend8to32ui(char i) {
-  unsigned int data = static_cast<unsigned int>(static_cast<int>(i));
   return static_cast<unsigned int>(static_cast<int>(i));
 }
 
@@ -263,9 +262,9 @@ void execute() {
       add_ops = decode(alu);
       switch(add_ops) {
         case ALU_LSLI:
-          rf.write(alu.instr.lsli.rd, alu.instr.lsli.rm << alu.instr.lsli.imm);
+          rf.write(alu.instr.lsli.rd, rf[alu.instr.lsli.rm] << alu.instr.lsli.imm);
           setCarryOverflow(rf[alu.instr.lsli.rm], rf[alu.instr.lsli.imm], OF_SHIFT);
-          setNegativeZeroFlags(alu.instr.lsli.rm << alu.instr.lsli.imm);
+          setNegativeZeroFlags(rf[alu.instr.lsli.rm] << alu.instr.lsli.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
           break;
@@ -295,7 +294,7 @@ void execute() {
         case ALU_SUB3I:
           rf.write(alu.instr.sub3i.rd, rf[alu.instr.sub3i.rn] - alu.instr.sub3i.imm);
           setCarryOverflow(rf[alu.instr.sub3i.rn], alu.instr.sub3i.imm, OF_SUB);
-          setNegativeZeroFlags(rf[alu.instr.sub3i.rn] + alu.instr.sub3i.imm);
+          setNegativeZeroFlags(rf[alu.instr.sub3i.rn] - alu.instr.sub3i.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
           break;
@@ -367,8 +366,9 @@ void execute() {
       dp_ops = decode(dp);
       switch(dp_ops) {
         case DP_CMP:
-          quit();
-          // need to implement
+          //cout << "CMP: " << rf[dp.instr.DP_Instr.rdn] << ", " << rf[dp.instr.DP_Instr.rm] << endl;
+          setCarryOverflow(rf[dp.instr.DP_Instr.rdn], rf[dp.instr.DP_Instr.rm], OF_SUB);
+          setNegativeZeroFlags(rf[dp.instr.DP_Instr.rdn] - rf[dp.instr.DP_Instr.rm]);
           break;
       }
       break;
@@ -383,15 +383,30 @@ void execute() {
           stats.numRegWrites++;
           break;
         case SP_ADD:
-          rf.write(sp.instr.add.rd, SP + rf[sp.instr.add.rm]); // unsure
-          setNegativeZeroFlags(SP + rf[sp.instr.add.rm]);
-          setCarryOverflow(SP, rf[sp.instr.add.rm], OF_ADD);
-          stats.numRegWrites++;
-          stats.numRegReads += 2;
+          {
+            int rd = sp.instr.add.rd;
+            if(sp.instr.add.d) {
+              rd += 8;
+            }
+
+            rf.write(rd, rf[rd] + rf[sp.instr.add.rm]);
+            setNegativeZeroFlags(rf[rd] + rf[sp.instr.add.rm]);
+            setCarryOverflow(rf[rd], rf[sp.instr.add.rm], OF_ADD);
+            stats.numRegWrites++;
+            stats.numRegReads += 2;
+          }
           break;
         case SP_CMP:
           // need to implement these
-          quit();
+          {
+            int rd = sp.instr.cmp.rd;
+            if(sp.instr.cmp.d) {
+              rd += 8;
+            }
+
+            setNegativeZeroFlags(rf[rd] - rf[sp.instr.cmp.rm]);
+            setCarryOverflow(rf[rd], rf[sp.instr.add.rm], OF_SUB);
+          }
           break;
       }
       break;
@@ -433,17 +448,21 @@ void execute() {
         case STRBI:
           // need to implement
           {
-            int addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
+            addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
             unsigned int data = dmem[addr];
+            cout << "PENSI: ";
+            cout << data;
             data = data & 0xFFFFFF00; // clear the bottom 8 bits
+            cout << ", " << data;
             data = data | (char)rf[ld_st.instr.ld_st_imm.rt]; // modify the bottom 8 bits
+            cout << ", " << data << endl;
             dmem.write(addr, data);
           }
           break;
         case LDRBI:
           // need to implement
           {
-            int addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
+            addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
             unsigned int data = 0x000000FF & (unsigned int)(char)dmem[addr];
             rf.write(ld_st.instr.ld_st_imm.rt, data);
           }
@@ -575,12 +594,26 @@ void execute() {
     case LDM:
       decode(ldm);
       // need to implement
-      quit();
+      addr = rf[ldm.instr.ldm.rn];
+      for(int i = 0; i < 8; i++) {
+        if(ldm.instr.ldm.reg_list & (1 << i)) {
+          rf.write(i, dmem[addr]);
+          addr += 4;
+        }
+      }
+      rf.write(ldm.instr.ldm.rn, addr);
       break;
     case STM:
       decode(stm);
-      // need to implement
-      quit();
+      
+      addr = rf[ldm.instr.ldm.rn];
+      for(int i = 0; i < 8; i++) {
+        if(ldm.instr.ldm.reg_list & (1 << i)) {
+          dmem.write(addr, rf[i]);
+          addr += 4;
+        }
+      }
+      rf.write(ldm.instr.ldm.rn, addr);
       break;
     case LDRL:
       // This instruction is complete, nothing needed
@@ -607,6 +640,8 @@ void execute() {
       // needs stats
       decode(addsp);
       rf.write(addsp.instr.add.rd, SP + (addsp.instr.add.imm*4));
+      setNegativeZeroFlags(SP + (addsp.instr.add.imm*4));
+      setCarryOverflow(SP, addsp.instr.add.imm*4, OF_ADD);
       stats.numRegWrites++;
       stats.numRegReads++;
       break;
