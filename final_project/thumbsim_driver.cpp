@@ -1,4 +1,8 @@
 #include "thumbsim.hpp"
+#include <iomanip>
+#include <iostream>
+#include <vector>
+#include <cmath>
 
 template<>
 void Memory<Data8, Data32>::write(const unsigned int addr, const Data32 data) {
@@ -109,6 +113,22 @@ void Memory<Data32, Data32>::dump(DataType dt) const {
 // cache size in blocks). You should also update the "hits" and
 // "misses" counters.
 bool Cache::access(unsigned int address) {
+  unsigned int index_bits = log2(blocksize / 4);
+  unsigned int cache_bits = log2(entries.size());
+
+  address = address >> index_bits; // delete the bits that let us index the data
+  unsigned int cache_loc = address % entries.size();
+  unsigned int tag = address >> cache_bits;
+
+  if(entries[cache_loc] == tag) {
+    hits++;
+    return true;
+  }
+  else {
+    entries[cache_loc] = tag;
+    misses++;
+  }
+
   return false;
 }
 

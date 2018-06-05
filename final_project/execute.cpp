@@ -419,6 +419,7 @@ void execute() {
           // functionally complete, needs stats
           addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm * 4;
           dmem.write(addr, rf[ld_st.instr.ld_st_imm.rt]);
+          caches.access(addr);
           stats.numMemWrites++;
           stats.numRegReads += 2;
           break;
@@ -426,6 +427,7 @@ void execute() {
           // functionally complete, needs stats
           addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm * 4;
           rf.write(ld_st.instr.ld_st_imm.rt, dmem[addr]);
+          caches.access(addr);
           stats.numMemReads++;
           stats.numRegReads++;
           stats.numRegWrites++;
@@ -434,6 +436,7 @@ void execute() {
           // need to implement
           addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
           dmem.write(addr, rf[ld_st.instr.ld_st_reg.rt]);
+          caches.access(addr);
           stats.numMemWrites++;
           stats.numRegReads += 3;
           break;
@@ -441,6 +444,7 @@ void execute() {
           // need to implement
           addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
           rf.write(ld_st.instr.ld_st_reg.rt, dmem[addr]);
+          caches.access(addr);
           stats.numRegReads++;
           stats.numRegReads += 2;
           stats.numRegWrites++;
@@ -501,6 +505,7 @@ void execute() {
             for(int i = 0; i < 8; i++) {
               if(misc.instr.push.reg_list & (1 << i)) {
                 dmem.write(addr, rf[i]);
+                caches.access(addr);
                 addr += 4;
                 stats.numMemWrites++;
               }
@@ -508,6 +513,7 @@ void execute() {
             
             if(misc.instr.push.m) {
               dmem.write(addr, LR);
+              caches.access(addr);
               stats.numMemWrites++;
             }
 
@@ -525,6 +531,7 @@ void execute() {
             for(int i = 0; i < 8; i++) {
               if(misc.instr.pop.reg_list & (1 << i)) {
                 rf.write(i, dmem[addr]);
+                caches.access(addr);
                 addr += 4;
                 stats.numMemReads++;
               }
@@ -532,6 +539,7 @@ void execute() {
             
             if(misc.instr.push.m) {
               rf.write(PC_REG, dmem[addr]);
+              caches.access(addr);
               addr += 4;
               stats.numMemReads++;
             }
