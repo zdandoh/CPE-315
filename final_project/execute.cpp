@@ -366,9 +366,9 @@ void execute() {
       dp_ops = decode(dp);
       switch(dp_ops) {
         case DP_CMP:
-          //cout << "CMP: " << rf[dp.instr.DP_Instr.rdn] << ", " << rf[dp.instr.DP_Instr.rm] << endl;
           setCarryOverflow(rf[dp.instr.DP_Instr.rdn], rf[dp.instr.DP_Instr.rm], OF_SUB);
           setNegativeZeroFlags(rf[dp.instr.DP_Instr.rdn] - rf[dp.instr.DP_Instr.rm]);
+          stats.numRegReads += 2;
           break;
       }
       break;
@@ -379,7 +379,7 @@ void execute() {
           // needs stats and flags
           rf.write((sp.instr.mov.d << 3 ) | sp.instr.mov.rd, rf[sp.instr.mov.rm]);
           setNegativeZeroFlags(rf[sp.instr.mov.rm]);
-          stats.numRegReads += 2;
+          stats.numRegReads++;
           stats.numRegWrites++;
           break;
         case SP_ADD:
@@ -406,6 +406,7 @@ void execute() {
 
             setNegativeZeroFlags(rf[rd] - rf[sp.instr.cmp.rm]);
             setCarryOverflow(rf[rd], rf[sp.instr.add.rm], OF_SUB);
+            stats.numRegReads += 2;
           }
           break;
       }
@@ -445,7 +446,7 @@ void execute() {
           addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
           rf.write(ld_st.instr.ld_st_reg.rt, dmem[addr]);
           caches.access(addr);
-          stats.numRegReads++;
+          stats.numMemReads++;
           stats.numRegReads += 2;
           stats.numRegWrites++;
           break;
@@ -457,6 +458,9 @@ void execute() {
             data = data & 0x00FFFFFF; // clear the top 8 bits
             data = data | (rf[ld_st.instr.ld_st_imm.rt] << 24); // modify the top 8 bits
             dmem.write(addr, data);
+            caches.access(addr);
+            stats.numRegReads += 2;
+            stats.numMemWrites++;
           }
           break;
         case LDRBI:
@@ -464,7 +468,11 @@ void execute() {
           {
             addr = rf[ld_st.instr.ld_st_imm.rn] + ld_st.instr.ld_st_imm.imm;
             unsigned int data = dmem[addr] >> 24;
+            caches.access(addr);
             rf.write(ld_st.instr.ld_st_imm.rt, data);
+            stats.numMemReads++;
+            stats.numRegReads++;
+            stats.numRegWrites++;
           }
           break;
         case STRBR:
@@ -475,6 +483,9 @@ void execute() {
             data = data & 0x00FFFFFF; // clear the top 8 bits
             data = data | (rf[ld_st.instr.ld_st_reg.rt] << 24); // modify the top 8 bits
             dmem.write(addr, data);
+            caches.access(addr);
+            stats.numRegReads += 3;
+            stats.numMemWrites++;
           }
           break;
         case LDRBR:
@@ -482,7 +493,11 @@ void execute() {
           {
             int addr = rf[ld_st.instr.ld_st_reg.rn] + rf[ld_st.instr.ld_st_reg.rm];
             unsigned int data = dmem[addr] >> 24;
+            caches.access(addr);
             rf.write(ld_st.instr.ld_st_reg.rt, data);
+            stats.numMemReads++;
+            stats.numRegReads += 2;
+            stats.numRegWrites++;
           }
           break;
       }
@@ -500,6 +515,7 @@ void execute() {
             }
             addr *= 4;
             addr = SP - addr;
+            stats.numRegReads++;
             int cp_addr = addr;
             
             for(int i = 0; i < 8; i++) {
@@ -508,6 +524,7 @@ void execute() {
                 caches.access(addr);
                 addr += 4;
                 stats.numMemWrites++;
+                stats.numRegReads++;
               }
             }
             
@@ -515,6 +532,7 @@ void execute() {
               dmem.write(addr, LR);
               caches.access(addr);
               stats.numMemWrites++;
+              stats.numRegReads++;
             }
 
             rf.write(SP_REG, cp_addr);
@@ -527,6 +545,7 @@ void execute() {
           {
             // Calculate initial address
             int addr = SP;
+            stats.numRegReads++;
             
             for(int i = 0; i < 8; i++) {
               if(misc.instr.pop.reg_list & (1 << i)) {
@@ -534,6 +553,7 @@ void execute() {
                 caches.access(addr);
                 addr += 4;
                 stats.numMemReads++;
+                stats.numRegWrites++;
               }
             }
             
@@ -542,6 +562,7 @@ void execute() {
               caches.access(addr);
               addr += 4;
               stats.numMemReads++;
+              stats.numRegWrites++;
             }
 
             rf.write(SP_REG, addr);
@@ -599,25 +620,35 @@ void execute() {
       decode(ldm);
       // need to implement
       addr = rf[ldm.instr.ldm.rn];
+      stats.numRegReads++;
       for(int i = 0; i < 8; i++) {
         if(ldm.instr.ldm.reg_list & (1 << i)) {
           rf.write(i, dmem[addr]);
+          stats.numRegWrites++;
+          stats.numMemReads++;
+          caches.access(addr);
           addr += 4;
         }
       }
       rf.write(ldm.instr.ldm.rn, addr);
+      stats.numRegWrites++;
       break;
     case STM:
       decode(stm);
       
       addr = rf[ldm.instr.ldm.rn];
+      stats.numRegReads++;
       for(int i = 0; i < 8; i++) {
         if(ldm.instr.ldm.reg_list & (1 << i)) {
           dmem.write(addr, rf[i]);
+          caches.access(addr);
+          stats.numRegReads++;
+          stats.numMemWrites++;
           addr += 4;
         }
       }
       rf.write(ldm.instr.ldm.rn, addr);
+      stats.numRegWrites++;
       break;
     case LDRL:
       // This instruction is complete, nothing needed
