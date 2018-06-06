@@ -135,6 +135,7 @@ bool Cache::access(unsigned int address) {
 void Stats::print() {
   cout << dec
        << "Total number of dynamic instructions: " << instrs << endl
+       << "Total number of cycles: " << cycles << endl
        << "Number of Memory Reads: " << numMemReads << endl
        << "Number of Memory Writes: " << numMemWrites << endl
        << "Number of Register Reads: " << numRegReads << endl

@@ -49,6 +49,11 @@ int main(int argc, char ** argv) {
     imem.dump(INSTRUCTIONS);
   }
 
+  // initialize reg delays for cycle count
+  for(int i = 0; i < 16; i++) {
+    stats.delays[i] = 0;
+  }
+
   cout << "Starting at PC " << hex << pc << endl;
   rf.write(15, pc);
   while(imem.inRange(rf[15])) {

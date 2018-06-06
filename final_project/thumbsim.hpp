@@ -699,6 +699,8 @@ class Stats {
       unsigned int numBackwardBranchesTaken;
       unsigned int numBackwardBranchesNotTaken;
 
+      unsigned int delays[16];
+
       void print();
 };
 class Options {

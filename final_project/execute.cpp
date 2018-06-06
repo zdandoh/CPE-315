@@ -204,6 +204,84 @@ static int checkCondition(unsigned short cond) {
   return FALSE;
 }
 
+void elapseCycle(int cycle_count) {
+  for(int k = 0; k < cycle_count; k++) {
+    for(int i = 0; i < 16; i++) {
+      if(stats.delays[i] > 0 ){
+        stats.delays[i] -= 1;
+      }
+    }
+    stats.cycles++;
+  }
+}
+
+void registerInst(string type, int dest, int dep1, int dep2, int dep3 = -1) {
+  int instructionCycles = 0;
+
+  int delay1 = 0;
+  int delay2 = 0;
+  int delay3 = 0;
+  if(dep1 > -1) {
+    delay1 = stats.delays[dep1];
+  }
+  if(dep2 > -1) {
+    delay2 = stats.delays[dep2];
+  }
+  if(dep3 > -1) {
+    delay3 = stats.delays[dep3];
+  }
+
+  // calculate the needed delay for the source registers
+  int delayCount = max(delay1, delay2);
+  delayCount = max(delayCount, delay3);
+
+  elapseCycle(delayCount); // stall if there are previous data dependencies that need resolving
+
+  if(type == "math") {
+    // some math instructions do not have a result, but if they do it is a 1 cycle delay, which will elapse by
+    // the time the next instruction is executed
+    instructionCycles = 1;
+  }
+  else if(type == "uncond") {
+    instructionCycles = 0;
+  }
+  else if(type == "bl") {
+    instructionCycles = 1;
+  }
+  else if(type == "taken") {
+    instructionCycles = 5; // branch predictor assumes untaken
+  }
+  else if(type == "untaken") {
+    instructionCycles = 1; // if branch isn't taken
+  }
+  else if(type == "load") { // since there are no ldms/stms in any of the simulations > 2 registers, this works for them too.
+    instructionCycles = 1;
+    stats.delays[dest] = 3;
+  }
+  else if(type == "store") {
+    instructionCycles = 1;
+  }
+  else if(type == "canread") {
+    instructionCycles = 0;
+  }
+  else if(type == "writereg") {
+    instructionCycles = 0;
+    stats.delays[dest] = 3;
+  }
+  else if(type == "ldmstm") {
+    instructionCycles = 1;
+  }
+  else if(type == "ldrl") {
+    instructionCycles = 4;
+  }
+  else {
+    cout << "Unknown inst type: " << type << endl;
+    exit(1);
+  }
+
+  elapseCycle(instructionCycles);
+}
+
 void execute() {
   // DEBUG
   // for(int i = 0; i < 16; i++) {
@@ -267,6 +345,7 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.lsli.rm] << alu.instr.lsli.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
+          registerInst("math", alu.instr.lsli.rd, alu.instr.lsli.rm, -1);
           break;
         case ALU_ADDR:
           // needs stats and flags
@@ -275,6 +354,7 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.addr.rn] + rf[alu.instr.addr.rm]);
           stats.numRegReads += 2;
           stats.numRegWrites++;
+          registerInst("math", alu.instr.addr.rd, alu.instr.addr.rn, alu.instr.addr.rm);
           break;
         case ALU_SUBR:
           rf.write(alu.instr.subr.rd, rf[alu.instr.subr.rn] - rf[alu.instr.subr.rm]);
@@ -282,6 +362,7 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.subr.rn] - rf[alu.instr.subr.rm]);
           stats.numRegReads += 2;
           stats.numRegWrites++;
+          registerInst("math", alu.instr.subr.rd, alu.instr.subr.rn, alu.instr.subr.rm);
           break;
         case ALU_ADD3I:
           // needs stats and flags
@@ -290,6 +371,7 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.add3i.rn] + alu.instr.add3i.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
+          registerInst("math", alu.instr.add3i.rd, alu.instr.add3i.rn, -1);
           break;
         case ALU_SUB3I:
           rf.write(alu.instr.sub3i.rd, rf[alu.instr.sub3i.rn] - alu.instr.sub3i.imm);
@@ -297,6 +379,7 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.sub3i.rn] - alu.instr.sub3i.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
+          registerInst("math", alu.instr.sub3i.rd, alu.instr.sub3i.rn, -1);
           break;
         case ALU_MOV:
           // needs stats and flags
@@ -304,11 +387,13 @@ void execute() {
           setNegativeZeroFlags(alu.instr.mov.imm);
           setCarryOverflow(rf[alu.instr.mov.rdn], alu.instr.mov.imm, OF_SUB);
           stats.numRegWrites++;
+          registerInst("math", alu.instr.mov.rdn, -1, -1);
           break;
         case ALU_CMP:
           setCarryOverflow(rf[alu.instr.cmp.rdn], alu.instr.cmp.imm, OF_SUB);
           setNegativeZeroFlags(rf[alu.instr.cmp.rdn] - alu.instr.cmp.imm);
           stats.numRegReads++;
+          registerInst("math", alu.instr.cmp.rdn, -1, -1);
           break;
         case ALU_ADD8I:
           // needs stats and flags
@@ -317,6 +402,8 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.add8i.rdn] + alu.instr.add8i.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
+          stats.cycles++;
+          registerInst("math", alu.instr.add8i.rdn, alu.instr.add8i.rdn, -1);
           break;
         case ALU_SUB8I:
           rf.write(alu.instr.sub8i.rdn, rf[alu.instr.sub8i.rdn] - alu.instr.sub8i.imm);
@@ -324,6 +411,8 @@ void execute() {
           setNegativeZeroFlags(rf[alu.instr.sub8i.rdn] + alu.instr.sub8i.imm);
           stats.numRegReads++;
           stats.numRegWrites++;
+          stats.cycles++;
+          registerInst("math", alu.instr.sub8i.rdn, alu.instr.sub8i.rdn, -1);
           break;
         default:
           cout << "instruction not implemented" << endl;
@@ -355,7 +444,8 @@ void execute() {
         rf.write(PC_REG, PC + 2 + addr);
 
         stats.numRegReads += 1;
-        stats.numRegWrites += 2; 
+        stats.numRegWrites += 2;
+        registerInst("bl", -1, -1, -1);
       }
       else {
         cerr << "Bad BL format." << endl;
@@ -369,6 +459,7 @@ void execute() {
           setCarryOverflow(rf[dp.instr.DP_Instr.rdn], rf[dp.instr.DP_Instr.rm], OF_SUB);
           setNegativeZeroFlags(rf[dp.instr.DP_Instr.rdn] - rf[dp.instr.DP_Instr.rm]);
           stats.numRegReads += 2;
+          registerInst("math", -1, dp.instr.DP_Instr.rdn, dp.instr.DP_Instr.rm);
           break;
       }
       break;
@@ -381,6 +472,7 @@ void execute() {
           setNegativeZeroFlags(rf[sp.instr.mov.rm]);
           stats.numRegReads++;
           stats.numRegWrites++;
+          registerInst("math", -1, dp.instr.DP_Instr.rdn, dp.instr.DP_Instr.rm);
           break;
         case SP_ADD:
           {
@@ -394,6 +486,7 @@ void execute() {
             setCarryOverflow(rf[rd], rf[sp.instr.add.rm], OF_ADD);
             stats.numRegWrites++;
             stats.numRegReads += 2;
+            registerInst("math", rd, rd, sp.instr.add.rm);
           }
           break;
         case SP_CMP:
@@ -407,6 +500,7 @@ void execute() {
             setNegativeZeroFlags(rf[rd] - rf[sp.instr.cmp.rm]);
             setCarryOverflow(rf[rd], rf[sp.instr.add.rm], OF_SUB);
             stats.numRegReads += 2;
+            registerInst("math", -1, rd, sp.instr.cmp.rm);
           }
           break;
       }
@@ -423,6 +517,7 @@ void execute() {
           caches.access(addr);
           stats.numMemWrites++;
           stats.numRegReads += 2;
+          registerInst("store", -1, ld_st.instr.ld_st_imm.rn, ld_st.instr.ld_st_imm.rt);
           break;
         case LDRI:
           // functionally complete, needs stats
@@ -432,6 +527,7 @@ void execute() {
           stats.numMemReads++;
           stats.numRegReads++;
           stats.numRegWrites++;
+          registerInst("load", ld_st.instr.ld_st_imm.rt, ld_st.instr.ld_st_imm.rn, -1);
           break;
         case STRR:
           // need to implement
@@ -440,6 +536,7 @@ void execute() {
           caches.access(addr);
           stats.numMemWrites++;
           stats.numRegReads += 3;
+          registerInst("store", -1, ld_st.instr.ld_st_reg.rn, ld_st.instr.ld_st_reg.rm, ld_st.instr.ld_st_reg.rt);
           break;
         case LDRR:
           // need to implement
@@ -449,6 +546,7 @@ void execute() {
           stats.numMemReads++;
           stats.numRegReads += 2;
           stats.numRegWrites++;
+          registerInst("load", ld_st.instr.ld_st_reg.rt, ld_st.instr.ld_st_reg.rn, ld_st.instr.ld_st_reg.rm);
           break;
         case STRBI:
           // need to implement
@@ -461,6 +559,7 @@ void execute() {
             caches.access(addr);
             stats.numRegReads += 2;
             stats.numMemWrites++;
+            registerInst("store", -1, ld_st.instr.ld_st_imm.rn, ld_st.instr.ld_st_imm.rt);
           }
           break;
         case LDRBI:
@@ -473,6 +572,7 @@ void execute() {
             stats.numMemReads++;
             stats.numRegReads++;
             stats.numRegWrites++;
+            registerInst("load", ld_st.instr.ld_st_imm.rt, ld_st.instr.ld_st_imm.rn, -1);
           }
           break;
         case STRBR:
@@ -486,6 +586,7 @@ void execute() {
             caches.access(addr);
             stats.numRegReads += 3;
             stats.numMemWrites++;
+            registerInst("store", -1, ld_st.instr.ld_st_reg.rn, ld_st.instr.ld_st_reg.rm, ld_st.instr.ld_st_reg.rt);
           }
           break;
         case LDRBR:
@@ -498,6 +599,7 @@ void execute() {
             stats.numMemReads++;
             stats.numRegReads += 2;
             stats.numRegWrites++;
+            registerInst("load", ld_st.instr.ld_st_reg.rt, ld_st.instr.ld_st_reg.rn, ld_st.instr.ld_st_reg.rm);
           }
           break;
       }
@@ -516,6 +618,7 @@ void execute() {
             addr *= 4;
             addr = SP - addr;
             stats.numRegReads++;
+            registerInst("canread", -1, SP_REG, -1);
             int cp_addr = addr;
             
             for(int i = 0; i < 8; i++) {
@@ -525,6 +628,7 @@ void execute() {
                 addr += 4;
                 stats.numMemWrites++;
                 stats.numRegReads++;
+                registerInst("store", -1, i, -1);
               }
             }
             
@@ -533,10 +637,12 @@ void execute() {
               caches.access(addr);
               stats.numMemWrites++;
               stats.numRegReads++;
+              registerInst("store", -1, LR_REG, -1);
             }
 
             rf.write(SP_REG, cp_addr);
             stats.numRegWrites++;
+            registerInst("store", -1, SP_REG, -1);
           }
           // need to implement
           break;
@@ -545,6 +651,7 @@ void execute() {
           {
             // Calculate initial address
             int addr = SP;
+            registerInst("canread", -1, SP_REG, -1);
             stats.numRegReads++;
             
             for(int i = 0; i < 8; i++) {
@@ -554,6 +661,7 @@ void execute() {
                 addr += 4;
                 stats.numMemReads++;
                 stats.numRegWrites++;
+                registerInst("load", i, -1, -1);
               }
             }
             
@@ -563,10 +671,12 @@ void execute() {
               addr += 4;
               stats.numMemReads++;
               stats.numRegWrites++;
+              registerInst("load", PC_REG, -1, -1);
             }
 
             rf.write(SP_REG, addr);
             stats.numRegWrites++;
+            registerInst("store", -1, SP_REG, -1);
           }
           break;
         case MISC_SUB:
@@ -574,12 +684,14 @@ void execute() {
           rf.write(SP_REG, SP - (misc.instr.sub.imm*4));
           stats.numRegWrites++;
           stats.numRegReads++;
+          registerInst("math", SP_REG, SP_REG, -1);
           break;
         case MISC_ADD:
           // functionally complete, needs stats
           rf.write(SP_REG, SP + (misc.instr.add.imm*4));
           stats.numRegWrites++;
           stats.numRegReads++;
+          registerInst("math", SP_REG, SP_REG, -1);
           break;
       }
       break;
@@ -597,7 +709,11 @@ void execute() {
           stats.numRegReads++;
           taken = 1;
           not_taken = 0;
+          registerInst("taken", -1, -1, -1);
+        } else {
+          registerInst("untaken", -1, -1, -1);
         }
+
         if((int)signExtend8to32ui(cond.instr.b.imm) > 0) {
           stats.numForwardBranchesTaken += taken;
           stats.numForwardBranchesNotTaken += not_taken;
@@ -615,6 +731,7 @@ void execute() {
       rf.write(PC_REG, PC + 2 * signExtend11to32ui(uncond.instr.b.imm) + 2);
       stats.numRegReads++;
       stats.numRegWrites++;
+      registerInst("uncond", -1, -1, -1);
       break;
     case LDM:
       decode(ldm);
@@ -628,10 +745,12 @@ void execute() {
           stats.numMemReads++;
           caches.access(addr);
           addr += 4;
+          registerInst("writereg", i, -1, -1);
         }
       }
       rf.write(ldm.instr.ldm.rn, addr);
       stats.numRegWrites++;
+      registerInst("ldmstm", -1, -1, -1);
       break;
     case STM:
       decode(stm);
@@ -645,9 +764,11 @@ void execute() {
           stats.numRegReads++;
           stats.numMemWrites++;
           addr += 4;
+          registerInst("canread", -1, i, -1);
         }
       }
       rf.write(ldm.instr.ldm.rn, addr);
+      registerInst("ldmstm", -1, -1, -1);
       stats.numRegWrites++;
       break;
     case LDRL:
@@ -670,6 +791,7 @@ void execute() {
       stats.numRegReads++;
       // One mem read, even though it's imem, and there's two of them
       stats.numMemReads++;
+      registerInst("ldrl", PC_REG, ldrl.instr.ldrl.rt, -1);
       break;
     case ADD_SP:
       // needs stats
@@ -679,6 +801,7 @@ void execute() {
       setCarryOverflow(SP, addsp.instr.add.imm*4, OF_ADD);
       stats.numRegWrites++;
       stats.numRegReads++;
+      registerInst("math", addsp.instr.add.rd, SP_REG, -1);
       break;
     default:
       cout << "[ERROR] Unknown Instruction to be executed" << endl;
