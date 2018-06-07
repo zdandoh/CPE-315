@@ -256,7 +256,7 @@ void registerInst(string type, int dest, int dep1, int dep2, int dep3 = -1) {
   }
   else if(type == "load") { // since there are no ldms/stms in any of the simulations > 2 registers, this works for them too.
     instructionCycles = 1;
-    stats.delays[dest] = 3;
+    stats.delays[dest] = 4; // the delay needs to be 4 because it has a latency of 3 and one cycle immediately elapses afterwards
   }
   else if(type == "store") {
     instructionCycles = 1;
@@ -266,7 +266,7 @@ void registerInst(string type, int dest, int dep1, int dep2, int dep3 = -1) {
   }
   else if(type == "writereg") {
     instructionCycles = 0;
-    stats.delays[dest] = 3;
+    stats.delays[dest] = 4;
   }
   else if(type == "ldmstm") {
     instructionCycles = 1;
